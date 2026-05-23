@@ -1,0 +1,201 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { PlusCircle, Trash2, ClipboardList, Loader2, Save, AlertCircle } from 'lucide-react';
+
+// Konfigurasi Supabase
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+
+export default function App() {
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSupabaseReady, setIsSupabaseReady] = useState(false);
+  const supabaseRef = useRef(null);
+  
+  const [formData, setFormData] = useState({
+    kode_aktifitas: '',
+    description_aktifitas: '',
+    jenis_unit: '',
+    hasil_standar_hm: '',
+    satuan: ''
+  });
+
+  useEffect(() => {
+    const loadSupabase = () => {
+      if (window.supabase) {
+        supabaseRef.current = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        setIsSupabaseReady(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.async = true;
+      script.onload = () => {
+        supabaseRef.current = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        setIsSupabaseReady(true);
+      };
+      document.body.appendChild(script);
+    };
+
+    loadSupabase();
+  }, []);
+
+  useEffect(() => {
+    if (isSupabaseReady) {
+      fetchActivities();
+    }
+  }, [isSupabaseReady]);
+
+  const fetchActivities = async () => {
+    if (!supabaseRef.current) return;
+    setLoading(true);
+    const { data, error } = await supabaseRef.current
+      .from('activities')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching data:", error);
+    } else {
+      setActivities(data || []);
+    }
+    setLoading(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!supabaseRef.current) return;
+    setIsSubmitting(true);
+
+    const { error } = await supabaseRef.current
+      .from('activities')
+      .insert([formData]);
+
+    if (error) {
+      console.error("Error adding activity:", error);
+    } else {
+      setFormData({
+        kode_aktifitas: '',
+        description_aktifitas: '',
+        jenis_unit: '',
+        hasil_standar_hm: '',
+        satuan: ''
+      });
+      fetchActivities();
+    }
+    setIsSubmitting(false);
+  };
+
+  const deleteActivity = async (id) => {
+    if (!supabaseRef.current) return;
+    const { error } = await supabaseRef.current
+      .from('activities')
+      .delete()
+      .eq('id', id);
+
+    if (!error) {
+      fetchActivities();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
+      <div className="max-w-2xl mx-auto">
+        <header className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-2">
+            <ClipboardList className="text-blue-600" />
+            Activity Tracker
+          </h1>
+          <p className="text-gray-500">Kelola data aktivitas Anda secara online</p>
+        </header>
+
+        {/* Input Form */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input 
+                placeholder="Kode Aktivitas" 
+                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.kode_aktifitas}
+                onChange={e => setFormData({...formData, kode_aktifitas: e.target.value})}
+                required
+              />
+              <input 
+                placeholder="Jenis Unit" 
+                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.jenis_unit}
+                onChange={e => setFormData({...formData, jenis_unit: e.target.value})}
+                required
+              />
+            </div>
+            <textarea 
+              placeholder="Deskripsi Aktivitas" 
+              className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              value={formData.description_aktifitas}
+              onChange={e => setFormData({...formData, description_aktifitas: e.target.value})}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input 
+                type="number"
+                placeholder="Hasil Standar/HM" 
+                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.hasil_standar_hm}
+                onChange={e => setFormData({...formData, hasil_standar_hm: e.target.value})}
+              />
+              <input 
+                placeholder="Satuan" 
+                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={formData.satuan}
+                onChange={e => setFormData({...formData, satuan: e.target.value})}
+              />
+            </div>
+            <button 
+              type="submit"
+              disabled={isSubmitting || !isSupabaseReady}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold p-3 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+              {isSupabaseReady ? 'Simpan Aktivitas' : 'Loading Supabase...'}
+            </button>
+          </form>
+        </div>
+
+        {/* Activity List */}
+        <div className="space-y-4">
+          {!isSupabaseReady ? (
+             <div className="text-center py-10 flex flex-col items-center gap-2 text-gray-400">
+               <Loader2 className="animate-spin" /> Menghubungkan ke Supabase...
+             </div>
+          ) : loading ? (
+            <div className="text-center py-10 flex flex-col items-center gap-2 text-gray-400">
+              <Loader2 className="animate-spin" /> Sedang memuat data...
+            </div>
+          ) : activities.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
+              Belum ada aktivitas yang tercatat
+            </div>
+          ) : (
+            activities.map((act) => (
+              <div key={act.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition-shadow">
+                <div>
+                  <h3 className="font-bold text-gray-800">{act.kode_aktifitas}</h3>
+                  <p className="text-sm text-gray-600">{act.description_aktifitas}</p>
+                  <div className="text-xs text-gray-400 mt-2">
+                    {act.jenis_unit} • {act.hasil_standar_hm} {act.satuan}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => deleteActivity(act.id)}
+                  className="text-red-400 hover:text-red-600 p-2"
+                >
+                  <Trash2 size={20} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
